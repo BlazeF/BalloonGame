@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<!-- <title>Balloon Cognitive Game – Hard + Corrected</title> -->
+
+<style>
+body{
+    background:white;
+    color:black;
+    font-family:Arial;
+    text-align:center;
+}
+
+#arena{
+    width:520px;
+    height:520px;
+    border-radius:50%;
+    border:3px solid #333;
+    margin:20px auto;
+    position:relative;
+    overflow:hidden;
+}
+
+button{
+    padding:10px 22px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+/* BALLOON SHAPE (NOT CIRCLE) */
+.balloon{
+    width:34px;
+    height:46px;
+    border-radius:50% 50% 45% 45%;
+    position:absolute;
+    opacity:0;
+    animation:fade 2.0s linear forwards;
+    transform:rotate(var(--rot));
+}
+
+.balloon::after{
+    content:"";
+    position:absolute;
+    width:2px;
+    height:14px;
+    background:#aaa;
+    left:50%;
+    top:44px;
+}
+
+/* COLORS */
+.red{background:red}
+.green{background:green}
+.yellow{background:gold}
+.blue{background:deepskyblue}
+.pink{background:hotpink}
+
+@keyframes fade{
+    0%{opacity:0}
+    15%{opacity:1}
+    75%{opacity:1}
+    100%{opacity:0}
+}
+</style>
+</head>
+
+<body>
+
+<!-- <h2>🎈 Balloon Cognitive Game (Hard – Fixed)</h2> -->
+<p><b>L</b> → Red  🔴 → Yellow 🟡→ Green🟢 | 🎈🎈🎈🎈🎈 H</b> → Exactly 5 same-color balloons</p>
+<!-- <p><b></p> -->
+
+<button id="startBtn">▶ Start Game</button>
+
+<h3>
+Score: <span id="score">0</span> |
+Wrong: <span id="wrong">0</span> |
+Missed: <span id="missed">0</span>
+</h3>
+
+<div id="arena"></div>
+
+<script>
+/* ---------- STATE ---------- */
+const arena = document.getElementById("arena");
+const scoreEl = document.getElementById("score");
+const wrongEl = document.getElementById("wrong");
+const missedEl = document.getElementById("missed");
+
+let score = 0, wrong = 0, missed = 0;
+let lock = false;
+let gameStarted = false;
+let mainLoopId = null;
+let distractionId = null;
+
+const colors = ["red","green","yellow","blue","pink"];
+
+/* ---------- HELPERS ---------- */
+function updateUI(){
+    scoreEl.innerText = score;
+    wrongEl.innerText = wrong;
+    missedEl.innerText = missed;
+}
+
+function rand(min,max){
+    return Math.random() * (max - min) + min;
+}
+
+/* ---------- SPAWN BALLOON ---------- */
+function spawn(color,x,y,type="distraction",eventId=null){
+    const b = document.createElement("div");
+    b.className = `balloon ${color}`;
+    b.dataset.type = type; // "sequence", "cluster", or "distraction"
+    if(eventId) b.dataset.eventId = eventId; // track event balloons
+    b.style.left = x + "px";
+    b.style.top = y + "px";
+    b.style.setProperty("--rot", rand(-10,10) + "deg");
+    arena.appendChild(b);
+    setTimeout(()=>b.remove(),3300);
+}
+
+/* ---------- DISTRACTIONS ---------- */
+function startDistractions(){
+    distractionId = setInterval(()=>{
+        if(Math.random() < 0.85){
+            spawn(
+                colors[Math.floor(Math.random()*colors.length)],
+                rand(20,480),
+                rand(20,480),
+                "distraction"
+            );
+        }
+    }, 1500);
+}
+
+/* ---------- GAME 1 : SEQUENCE ---------- */
+let currentSequenceId = 0; // unique ID per sequence
+let expectingL = false;
+
+function sequenceGame(){
+    if(lock) return;
+    lock = true;
+    expectingL = false;
+
+    const valid = Math.random() < 0.45;
+    const seq = valid
+        ? ["red","yellow","green"]
+        : [...colors].sort(()=>Math.random()-0.5).slice(0,3);
+
+    currentSequenceId++;
+    let i = 0;
+
+    const intv = setInterval(()=>{
+        spawn(seq[i], rand(160,360), rand(160,360), "sequence", currentSequenceId);
+        i++;
+        if(i === 3){
+            clearInterval(intv);
+
+            if(valid) expectingL = currentSequenceId;
+
+            // Short decision window
+            setTimeout(()=>{
+                if(expectingL === currentSequenceId){  // missed
+                    missed++;
+                    expectingL = false;
+                    updateUI();
+                }
+                lock = false;
+            }, 1600);
+        }
+    }, 750);
+}
+
+/* ---------- GAME 2 : CLUSTER ---------- */
+let currentClusterId = 0;
+let expectingH = false;
+
+function clusterGame(){
+    if(lock) return;
+    lock = true;
+    expectingH = false;
+
+    const counts = [3,4,5,6,7,8];
+    const count = counts[Math.floor(Math.random()*counts.length)];
+    const valid = count === 5;
+
+    const color = colors[Math.floor(Math.random()*colors.length)];
+    const cx = rand(180,340);
+    const cy = rand(180,340);
+    const radius = 40;
+
+    currentClusterId++;
+
+    for(let i=0;i<count;i++){
+        const a = (2*Math.PI/count)*i;
+        spawn(
+            color,
+            cx + Math.cos(a)*radius + rand(-5,5),
+            cy + Math.sin(a)*radius + rand(-5,5),
+            "cluster",
+            currentClusterId
+        );
+    }
+
+    if(valid) expectingH = currentClusterId;
+
+    setTimeout(()=>{
+        if(expectingH === currentClusterId){ // missed
+            missed++;
+            expectingH = false;
+            updateUI();
+        }
+        lock = false;
+    }, 2200);
+}
+
+/* ---------- MAIN LOOP ---------- */
+function startMainLoop(){
+    mainLoopId = setInterval(()=>{
+        Math.random() < 0.5 ? sequenceGame() : clusterGame();
+    }, 3200);
+}
+
+/* ---------- INPUT ---------- */
+document.addEventListener("keydown", e=>{
+    if(!gameStarted) return;
+
+    // L for sequence
+    if(e.key === "l" || e.key === "L"){
+        if(expectingL){
+            score++;
+            expectingL = false;
+        } else {
+            wrong++;
+        }
+        updateUI();
+    }
+
+    // H for cluster
+    if(e.key === "h" || e.key === "H"){
+        if(expectingH){
+            score++;
+            expectingH = false;
+        } else {
+            wrong++;
+        }
+        updateUI();
+    }
+});
+
+/* ---------- START BUTTON ---------- */
+document.getElementById("startBtn").addEventListener("click", ()=>{
+    if(gameStarted) return;
+
+    gameStarted = true;
+    score = 0;
+    wrong = 0;
+    missed = 0;
+    expectingL = false;
+    expectingH = false;
+    updateUI();
+
+    startDistractions();
+    startMainLoop();
+
+    const btn = document.getElementById("startBtn");
+    btn.innerText = "Game Running…";
+    btn.disabled = true;
+});
+</script>
+
+</body>
+</html>
