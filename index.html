@@ -34,14 +34,14 @@ button{
     margin:10px auto;
 }
 
-/* BALLOON SHAPE (NOT CIRCLE) */
+/* BALLOON SHAPE */
 .balloon{
     width:34px;
     height:46px;
     border-radius:50% 50% 45% 45%;
     position:absolute;
     opacity:0;
-    animation:fade 2.0s linear forwards;
+    animation:fade 2.2s linear forwards;
     transform:rotate(var(--rot));
 }
 
@@ -65,7 +65,7 @@ button{
 @keyframes fade{
     0%{opacity:0}
     15%{opacity:1}
-    75%{opacity:1}
+    80%{opacity:1}
     100%{opacity:0}
 }
 </style>
@@ -73,7 +73,10 @@ button{
 
 <body>
 
-<p><b>L</b> → Red 🔴 → Yellow 🟡→ Green 🟢 | 🎈🎈🎈🎈🎈 <b>H</b> → Exactly 5 same-color balloons</p>
+<p>
+<b>H</b> → Yellow 🟡 → Red 🔴 → Green 🟢 |
+🎈🎈🎈🎈🎈 <b>L</b> → Exactly 5 same-color balloons
+</p>
 
 <button id="startBtn">▶ Start Game</button>
 
@@ -85,10 +88,9 @@ Missed: <span id="missed">0</span>
 
 <div id="arena"></div>
 
-<!-- MOBILE / TOUCH CONTROLS -->
 <div id="controls">
-    <button id="btnL">L</button>
     <button id="btnH">H</button>
+    <button id="btnL">L</button>
 </div>
 
 <script>
@@ -101,8 +103,6 @@ const missedEl = document.getElementById("missed");
 let score = 0, wrong = 0, missed = 0;
 let lock = false;
 let gameStarted = false;
-let mainLoopId = null;
-let distractionId = null;
 
 const colors = ["red","green","yellow","blue","pink"];
 
@@ -118,106 +118,94 @@ function rand(min,max){
 }
 
 /* ---------- SPAWN BALLOON ---------- */
-function spawn(color,x,y,type="distraction",eventId=null){
+function spawn(color,x,y){
     const b = document.createElement("div");
     b.className = `balloon ${color}`;
-    b.dataset.type = type; // "sequence", "cluster", or "distraction"
-    if(eventId) b.dataset.eventId = eventId; // track event balloons
     b.style.left = x + "px";
     b.style.top = y + "px";
-    b.style.setProperty("--rot", rand(-10,10) + "deg");
+    b.style.setProperty("--rot", rand(-12,12) + "deg");
     arena.appendChild(b);
-    setTimeout(()=>b.remove(),3300);
+    setTimeout(()=>b.remove(),3400);
 }
 
 /* ---------- DISTRACTIONS ---------- */
 function startDistractions(){
-    distractionId = setInterval(()=>{
-        if(Math.random() < 0.85){
+    setInterval(()=>{
+        if(Math.random() < 0.75){
             spawn(
                 colors[Math.floor(Math.random()*colors.length)],
                 rand(20,480),
-                rand(20,480),
-                "distraction"
+                rand(20,480)
             );
         }
-    }, 1500);
+    }, 1700);
 }
 
-/* ---------- GAME 1 : SEQUENCE ---------- */
-let currentSequenceId = 0;
-let expectingL = false;
+/* ---------- GAME 1 : SEQUENCE (H) ---------- */
+let expectingSequence = false;
 
 function sequenceGame(){
     if(lock) return;
     lock = true;
-    expectingL = false;
+    expectingSequence = false;
 
-    const valid = Math.random() < 0.65;
+    const valid = Math.random() < 0.7;
     const seq = valid
-        ? ["red","yellow","green"]
+        ? ["yellow","red","green"]
         : [...colors].sort(()=>Math.random()-0.5).slice(0,3);
 
-    currentSequenceId++;
     let i = 0;
-
     const intv = setInterval(()=>{
-        spawn(seq[i], rand(160,360), rand(160,360), "sequence", currentSequenceId);
+        spawn(seq[i], rand(170,330), rand(170,330));
         i++;
         if(i === 3){
             clearInterval(intv);
-
-            if(valid) expectingL = currentSequenceId;
+            if(valid) expectingSequence = true;
 
             setTimeout(()=>{
-                if(expectingL === currentSequenceId){  // missed
+                if(expectingSequence){
                     missed++;
-                    expectingL = false;
+                    expectingSequence = false;
                     updateUI();
                 }
                 lock = false;
-            }, 1600);
+            }, 1700);
         }
-    }, 750);
+    }, 800);
 }
 
-/* ---------- GAME 2 : CLUSTER ---------- */
-let currentClusterId = 0;
-let expectingH = false;
+/* ---------- GAME 2 : CLUSTER (L) ---------- */
+let expectingCluster = false;
 
 function clusterGame(){
     if(lock) return;
     lock = true;
-    expectingH = false;
+    expectingCluster = false;
 
-    const counts = [3,4,5,5,6,7,8];
+    const counts = [4,5,5,5,6,7];
     const count = counts[Math.floor(Math.random()*counts.length)];
     const valid = count === 5;
 
     const color = colors[Math.floor(Math.random()*colors.length)];
-    const cx = rand(180,340);
-    const cy = rand(180,340);
-    const radius = 40;
-
-    currentClusterId++;
+    const cx = rand(200,320);
+    const cy = rand(200,320);
+    const radius = 38;
 
     for(let i=0;i<count;i++){
         const a = (2*Math.PI/count)*i;
         spawn(
             color,
-            cx + Math.cos(a)*radius + rand(-5,5),
-            cy + Math.sin(a)*radius + rand(-5,5),
-            "cluster",
-            currentClusterId
+            cx + Math.cos(a)*radius + rand(-4,4),
+            cy + Math.sin(a)*radius + rand(-4,4)
         );
     }
 
-    if(valid) expectingH = currentClusterId;
+    if(valid) expectingCluster = true;
 
     setTimeout(()=>{
-        if(expectingH === currentClusterId){ // missed
+        if(expectingCluster){
             missed++;
-            expectingH = false;
+            expectingCluster = false;
             updateUI();
         }
         lock = false;
@@ -226,29 +214,31 @@ function clusterGame(){
 
 /* ---------- MAIN LOOP ---------- */
 function startMainLoop(){
-    mainLoopId = setInterval(()=>{
-        Math.random() < 0.5 ? sequenceGame() : clusterGame();
-    }, 2200);
+    setInterval(()=>{
+        Math.random() < 0.55 ? sequenceGame() : clusterGame();
+    }, 2400);
 }
 
-/* ---------- INPUT HANDLERS ---------- */
+/* ---------- INPUT ---------- */
 function handleInput(key){
     if(!gameStarted) return;
 
-    if(key === "L"){
-        if(expectingL){
+    // H → Sequence
+    if(key === "H"){
+        if(expectingSequence){
             score++;
-            expectingL = false;
+            expectingSequence = false;
         } else {
             wrong++;
         }
         updateUI();
     }
 
-    if(key === "H"){
-        if(expectingH){
+    // L → Cluster
+    if(key === "L"){
+        if(expectingCluster){
             score++;
-            expectingH = false;
+            expectingCluster = false;
         } else {
             wrong++;
         }
@@ -256,25 +246,19 @@ function handleInput(key){
     }
 }
 
-// Keyboard
 document.addEventListener("keydown", e=>{
     handleInput(e.key.toUpperCase());
 });
 
-// Mobile buttons
-document.getElementById("btnL").addEventListener("click", ()=>handleInput("L"));
-document.getElementById("btnH").addEventListener("click", ()=>handleInput("H"));
+document.getElementById("btnH").onclick = ()=>handleInput("H");
+document.getElementById("btnL").onclick = ()=>handleInput("L");
 
-/* ---------- START BUTTON ---------- */
-document.getElementById("startBtn").addEventListener("click", ()=>{
+/* ---------- START ---------- */
+document.getElementById("startBtn").onclick = ()=>{
     if(gameStarted) return;
-
     gameStarted = true;
-    score = 0;
-    wrong = 0;
-    missed = 0;
-    expectingL = false;
-    expectingH = false;
+
+    score = wrong = missed = 0;
     updateUI();
 
     startDistractions();
@@ -283,7 +267,7 @@ document.getElementById("startBtn").addEventListener("click", ()=>{
     const btn = document.getElementById("startBtn");
     btn.innerText = "Game Running…";
     btn.disabled = true;
-});
+};
 </script>
 
 </body>
